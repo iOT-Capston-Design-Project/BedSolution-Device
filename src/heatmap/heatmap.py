@@ -8,10 +8,10 @@ from rich.text import Text
 from rich.columns import Columns
 from rich import box
 
-from detection.config import Config
+from detection.config import DetectionConfig
 
 class PressureHeatmap:
-    def __init__(self, config: Config):
+    def __init__(self, config: DetectionConfig):
         self.config = config
 
     def _rgb_hex(self, r,g,b): return f"#{int(r):02x}{int(g):02x}{int(b):02x}"
@@ -41,11 +41,11 @@ class PressureHeatmap:
     def _overlay_heatmap(self, head, shoulder, hip, heels):
         ov = {}
         if head is not None:
-            r,c,_ = head; ov[(int(round(r)), int(round(c)))] = ("Head", "bold white")
-        sr,sc,_ = shoulder; ov[(int(round(sr)), int(round(sc)))] = ("Shoulder", "bold white")
-        hr,hc,_ = hip; ov[(int(round(hr)), int(round(hc)))] = ("Hip", "bold white")
+            r,c,_ = head; ov[(int(round(r)), int(round(c)))] = ("H", "bold white")
+        sr,sc,_ = shoulder; ov[(int(round(sr)), int(round(sc)))] = ("S", "bold white")
+        hr,hc,_ = hip; ov[(int(round(hr)), int(round(hc)))] = ("P", "bold white")
         for r,c,_ in heels:
-            ov[(int(round(r)), int(round(c)))] = ("Heel", "bold white")
+            ov[(int(round(r)), int(round(c)))] = ("L", "bold white")
         return ov
 
     def _merge_head_body(self, head: np.ndarray, body: np.ndarray, fill_value: float = 0.0) -> Tuple[np.ndarray, int]:
@@ -91,8 +91,8 @@ class PressureHeatmap:
             row_text = Text()
             for c in range(merged.shape[1]):
                 val = float(merged[r,c])
-                r, g, b = self._colormap_rgb(val)
-                bg = self._rgb_hex(r,g,b)
+                cr, cg, cb = self._colormap_rgb(val)
+                bg = self._rgb_hex(cr, cg, cb)
 
                 ch = " "*cell_w
                 style = f"on {bg}"
@@ -112,14 +112,14 @@ class PressureHeatmap:
         return Panel(table, title="Heatmap", padding=(0, 0), box=box.SQUARE)
 
     # Draw heatmap to console
-    def render(self, 
-               console: Console,
+    def render(self,
                H: np.ndarray, B: np.ndarray,
                head: Optional[Tuple[float, float, float]], 
                shoulder: Tuple[float, float, float], 
                hip: Tuple[float, float, float], 
                heels: List[Tuple[float, float, float]],
-               threshold: float):
+               threshold: float) -> Panel:
         overlays = self._overlay_heatmap(head, shoulder, hip, heels)
         panel = self._render(H, B, overlays, threshold)
-        console.print(panel)
+        return panel
+        

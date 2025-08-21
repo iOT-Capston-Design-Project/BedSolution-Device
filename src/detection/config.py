@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 @dataclass
-class Config:
+class DetectionConfig:
     value_min: int = 100
     value_max: int = 900
     sampling_sec: float = 1.0 # 1Hz

@@ -4,8 +4,8 @@ from typing import Tuple, Dict, Optional, List
 import math, time, csv
 from dataclasses import asdict
 from enum import Enum
-from src.detection.config import Config
-from src.detection.frame_buffer import FrameBuffer
+from detection.config import DetectionConfig
+from detection.frame_buffer import FrameBuffer
 
 class TorsoParts(Enum):
     HEAD = 0
@@ -23,7 +23,7 @@ class Posture(Enum):
     PRONE = 3 # 엎드림
 
 class Detection:
-    def __init__(self, config: Config):
+    def __init__(self, config: DetectionConfig):
         self.config = config
         self.frame_buffer = FrameBuffer(config.moving_avg_N)
         self._init_log()
@@ -65,12 +65,13 @@ class Detection:
         return r, c
 
     # 몸통 부분 탐지
-    def _detect_torso_parts(self, body: np.ndarray, threshold: float) -> Dict:
+    def _detect_torso_parts(self, body: np.ndarray, threshold: float, min_activated: int = 3) -> Dict:
         sum = self._sum2x2(body)
+
+         # TODO: 임계값을 이용 활성화된 셀 파악
+
         f_r, f_c = self._argmax2d(sum) # 2x2 블록 합의 최대값 위치
         r_max, c_max = self._row_col_max(body) # 행과 열의 최대값 위치
-
-        # TODO: 임계값을 이용 활성화된 셀 파악
 
         # 포함 여부
         overlaps_row = (f_r == r_max)
@@ -99,7 +100,7 @@ class Detection:
     # Return (row, col, score) if detected, None if not
     def _detect_head(self, head: np.ndarray, threshold: float) -> Optional[Tuple[int, int, int]]:
         x = head.copy()
-        x[x < threshold] = -np.inf
+        x[x < threshold] = 0.0
         if np.all(~np.isfinite(x)):
             return None
         r, c = self._argmax2d(x)
@@ -108,13 +109,13 @@ class Detection:
     def _detect_heel(self, body: np.ndarray, threshold: float) -> List[Tuple[float, float, float]]:
         if self.config.heel_search_rows < 1: return []
         rows = slice(body.shape[0]-self.config.heel_search_rows, body.shape[0])
-        sub = body[rows, :].copy()
-        sub[sub < threshold] = 0.0
+        mask = body[rows, :].copy()
+        mask[mask < threshold] = 0.0
 
         # 열별 최댓값
-        vals = sub.max(axis=0)
-        rows_idx = sub.argmax(axis= 0)
-        candidates = [(rows.start+int(rows_idx[c]), c, float(vals[c]))for c in range(rows.shape[1]) if vals[c] > 0.0]
+        vals = mask.max(axis=0)
+        rows_idx = mask.argmax(axis= 0)
+        candidates = [(rows.start+int(rows_idx[c]), c, float(vals[c])) for c in range(mask.shape[1]) if vals[c] > 0.0]
         candidates.sort(key=lambda x: x[2], reverse=True)
         return candidates[:2]
 
@@ -143,6 +144,7 @@ class Detection:
 
         return label
 
+    # head_raw: int32, body_raw: int32
     def detect(self, head_raw: np.ndarray, body_raw: np.ndarray) -> Dict:
         head = np.clip(head_raw, self.config.value_min, self.config.value_max)
         body = np.clip(body_raw, self.config.value_min, self.config.value_max)
