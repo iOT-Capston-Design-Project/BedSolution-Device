@@ -17,7 +17,7 @@ from typing import get_type_hints
 
 # Project Modules
 from config_manager import config_manager
-import api_client
+from api.api_client import APIClient
 from heatmap.heatmap import PressureHeatmap
 from detection.config import DetectionConfig
 from serial.serial_communication import SerialCommunication
@@ -30,7 +30,10 @@ class BedSolutionCLI:
         """Initializes the CLI application."""
         self.console = Console()
         self.config_manager = config_manager
-        self.api_client = api_client
+        # APIClient를 설정의 기본값으로 초기화
+        initial_server_url = self.config_manager.get_setting("Server", "url")
+        initial_api_key = self.config_manager.get_setting("Server", "api_key")
+        self.api_client = APIClient(initial_server_url, initial_api_key)
         self.title_art = """
 ██████╗ ███████╗██████╗     ███████╗ ██████╗ ██╗     ██╗   ██╗████████╗██╗ ██████╗ ███╗   ██╗
 ██╔══██╗██╔════╝██╔══██╗    ██╔════╝██╔═══██╗██║     ██║   ██║╚══██╔══╝██║██╔═══██╗████╗  ██║
@@ -197,7 +200,7 @@ class BedSolutionCLI:
 
                     # Simulate data sending
                     if sync_status:
-                        self.api_client.send_data(server_url, api_key, device_id, {
+                        self.api_client.send_data(None, None, device_id, {
                             "occiput": head_pressure, 
                             "scapula": shoulder_pressure, 
                             "elbow": 0, # Not detected
@@ -219,7 +222,7 @@ class BedSolutionCLI:
         server_url, api_key, device_id = self._get_server_config()
         with self.console.status(f"[bold green]Fetching details for {date}...", spinner="dots"):
             time.sleep(1)
-            details = self.api_client.get_log_details(server_url, api_key, device_id, date)
+            details = self.api_client.get_log_details(None, None, device_id, date)
 
         if not details:
             self.console.print(Panel(f"No detailed logs found for [cyan]{date}[/cyan].", title="[bold red]Not Found[/bold red]"))
@@ -255,7 +258,7 @@ class BedSolutionCLI:
 
             with self.console.status("[bold green]Fetching available log dates...", spinner="dots"):
                 time.sleep(1)
-                logs_summary = self.api_client.get_logs_by_date(server_url, api_key, device_id)
+                logs_summary = self.api_client.get_logs_by_date(None, None, device_id)
 
             if not logs_summary:
                 self.console.print(Panel("No log dates found for this device.", title="[bold red]Not Found[/bold red]"))
@@ -302,7 +305,7 @@ class BedSolutionCLI:
 
         with self.console.status("[bold green]Registering device with the server...", spinner="dots"):
             time.sleep(2)
-            new_device_id = self.api_client.register_device(server_url, api_key)
+            new_device_id = self.api_client.register_device(None, None)
             result_panel = None
             if new_device_id:
                 self.config_manager.update_setting("Device", "id", new_device_id)
@@ -425,6 +428,9 @@ class BedSolutionCLI:
                 if new_url:
                     self.config_manager.update_setting("Server", "url", new_url)
                     self.console.print("[green]✔ Server URL saved successfully.[/green]")
+                    # 변경된 설정을 반영하여 APIClient 재초기화
+                    refreshed_api_key = self.config_manager.get_setting("Server", "api_key")
+                    self.api_client = APIClient(new_url, refreshed_api_key)
                     self._pause()
 
             elif choice == "2. Change API Key":
@@ -432,6 +438,9 @@ class BedSolutionCLI:
                 if new_key:
                     self.config_manager.update_setting("Server", "api_key", new_key)
                     self.console.print("[green]✔ API Key saved successfully.[/green]")
+                    # 변경된 설정을 반영하여 APIClient 재초기화
+                    refreshed_server_url = self.config_manager.get_setting("Server", "url")
+                    self.api_client = APIClient(refreshed_server_url, new_key)
                     self._pause()
 
             elif choice == "3. Detection Settings":
