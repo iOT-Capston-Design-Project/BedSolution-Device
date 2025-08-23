@@ -2,3 +2,4 @@ rich
 requests
 python-dotenv
 questionary
+supabase

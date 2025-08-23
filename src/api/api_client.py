@@ -1,8 +1,9 @@
+from datetime import datetime
 from typing import List, Dict, Any, Optional
-import requests
-from requests import Response
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+from supabase import create_client
+import uuid
+
+from api.device_dto import DeviceDTO
 
 
 LogSummary = List[Dict[str, Any]]
@@ -22,67 +23,29 @@ class APIClient:
         self,
         server_url: Optional[str] = None,
         api_key: Optional[str] = None,
-        *,
-        timeout_seconds: float = 5.0,
-        max_retries: int = 2,
-        backoff_factor: float = 0.3,
     ) -> None:
         self.server_url = server_url.rstrip("/") if server_url else None
         self.api_key = api_key
-        self.timeout_seconds = timeout_seconds
+        self.client = create_client(self.server_url, self.api_key)
 
-        self.session = requests.Session()
-        retry_strategy = Retry(
-            total=max_retries,
-            connect=max_retries,
-            read=max_retries,
-            status=max_retries,
-            backoff_factor=backoff_factor,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
+    def _generate_device_id(self) -> int:
+        device_uuid = uuid.uuid4()
+        device_id = int(device_uuid.hex, 16) % (2**31)
+        return device_id
 
-    def _resolve_credentials(self, server_url: Optional[str], api_key: Optional[str]) -> (str, str):
-        """메서드 인자와 인스턴스 기본값을 조합해 실제 사용할 자격 정보를 반환."""
-        final_url = (server_url or self.server_url or "").rstrip("/")
-        final_key = api_key or self.api_key or ""
-        if not final_url or not final_key:
-            raise ValueError("Server URL과 API Key는 반드시 설정되어야 합니다.")
-        return final_url, final_key
 
-    def _build_headers(self, api_key: str) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-
-    def _request(self, method: str, url: str, api_key: str, **kwargs: Any) -> Response:
-        """공통 요청 메서드. 필요 시 실제 서버 연동에 사용하세요."""
-        headers = kwargs.pop("headers", {})
-        merged_headers = {**self._build_headers(api_key), **headers}
-        return self.session.request(
-            method=method,
-            url=url,
-            headers=merged_headers,
-            timeout=self.timeout_seconds,
-            **kwargs,
-        )
-
-    def register_device(self, server_url: Optional[str] = None, api_key: Optional[str] = None) -> Optional[str]:
-        """서버에 디바이스를 등록하고 디바이스 ID를 반환.
-
-        현재는 샘플 값을 반환합니다.
-        """
-        # 실제 연동 예시
-        # base_url, key = self._resolve_credentials(server_url, api_key)
-        # resp = self._request("POST", f"{base_url}/devices", key, json={})
-        # resp.raise_for_status()
-        # return resp.json().get("device_id")
-        return "dummy-device-id-12345"
+    def register_device(self, server_url: Optional[str] = None, api_key: Optional[str] = None) -> Optional[int]:
+        device_id = self._generate_device_id()
+        dto = DeviceDTO(device_id, datetime.now())
+        devices_table = self.client.table("devices")
+        query = devices_table.insert(dto.to_dict())
+        try:
+            response = query.execute()
+            if response.data:
+                return response.data[0]["id"]
+        except Exception as e:
+            return None
+        return None
 
     def get_logs_by_date(self, server_url: Optional[str], api_key: Optional[str], device_id: str) -> LogSummary:
         """날짜별 로그 요약(부위별 압력 시간 총합-초)을 조회.
@@ -150,23 +113,3 @@ class APIClient:
         # resp.raise_for_status()
         # return True
         return True
-
-
-# 모듈 수준의 기본 클라이언트와 하위 호환 함수 래퍼
-_default_client = APIClient()
-
-
-def register_device(server_url: str, api_key: str) -> Optional[str]:
-    return _default_client.register_device(server_url, api_key)
-
-
-def get_logs_by_date(server_url: str, api_key: str, device_id: str) -> LogSummary:
-    return _default_client.get_logs_by_date(server_url, api_key, device_id)
-
-
-def get_log_details(server_url: str, api_key: str, device_id: str, date: str) -> LogDetails:
-    return _default_client.get_log_details(server_url, api_key, device_id, date)
-
-
-def send_data(server_url: str, api_key: str, device_id: str, data: Dict[str, Any]) -> bool:
-    return _default_client.send_data(server_url, api_key, device_id, data)
