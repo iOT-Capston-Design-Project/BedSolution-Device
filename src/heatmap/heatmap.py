@@ -107,9 +107,27 @@ class PressureHeatmap:
                     style = f"{fgstyle} on {bg}"
 
                 row_text.append(Text(ch, style=style))
-
             table.add_row(row_text)
-        return Panel(table, title="Heatmap", padding=(0, 0), box=box.SQUARE)
+        
+        # 오버레이 범례 생성
+        legend_table = Table.grid(padding=1)
+        legend_table.add_column("Symbol", style="bold white", justify="center")
+        legend_table.add_column("Body Part", style="white", justify="left")
+        
+        legend_items = [
+            ("H", "Head"),
+            ("S", "Shoulder"),
+            ("P", "Hip"),
+            ("L", "Heels")
+        ]
+        
+        for symbol, description in legend_items:
+            legend_table.add_row(symbol, description)
+        
+        # 히트맵 오른쪽에 범례 배치
+        combined_content = Columns([table, legend_table], equal=False, expand=False)
+        
+        return Panel(combined_content, title="Heatmap", padding=(1, 1), box=box.SQUARE)
 
     # Draw heatmap to console
     def render(self,
