@@ -22,6 +22,7 @@ from heatmap.heatmap import PressureHeatmap
 from detection.config import DetectionConfig
 from serial.serial_communication import SerialCommunication
 from detection.detection import Detection
+from mllogging.mllogger import MLLogger
 
 
 class BedSolutionCLI:
@@ -455,6 +456,111 @@ class BedSolutionCLI:
                     self.console.print("[green]✔ All settings have been deleted.[/green]")
                     self._pause()
 
+    def _model_training_logs_ui(self):
+        """Model Training Logs UI - Real-time data collection for model training"""
+        self._clear_screen()
+
+        self.console.print(Panel("[bold yellow]Model Training Logs Mode[/bold yellow]", title="[bold green]Starting Real-time Data Collection[/bold green]"))
+        self.console.print("This mode will collect real-time sensor data for model training.")
+        self.console.print("Press Ctrl+C to save logs and return to the main menu.")
+        self._pause()
+
+        # Initialize Serial Communication and MLLogger
+        serial_comm = SerialCommunication()
+        mllogger = MLLogger("heatmap_log.csv")
+        
+        serial_comm.start()
+
+        # Get current log file path and info
+        log_file_path = os.path.abspath("heatmap_log.csv")
+        buffer_count = 0
+
+        layout = Layout()
+        layout.split(
+            Layout(name="header", size=6),
+            Layout(name="main_content", ratio=1)
+        )
+        layout["main_content"].split_row(
+            Layout(name="data_stream", ratio=1)
+        )
+
+        data_rows_buffer = []
+        MAX_DATA_ROWS = 20
+
+        try:
+            with Live(layout, console=self.console, screen=True, redirect_stderr=False, vertical_overflow="visible") as live:
+                for ts, head_raw, body_raw in serial_comm.stream():
+                    mllogger.log_heatmap(head_raw, body_raw)
+
+                    header_content = Text.assemble(
+                        Text("Model Training Logs [", style="bold"),
+                        Text("Real-time Collection", style="cyan"),
+                        Text("]\n", style="bold"),
+                        Text(f"Log File: ", style="bold"),
+                        Text(f"{log_file_path}", style="cyan"),
+                        Text(f"\nBuffer Count: ", style="bold"),
+                        Text(f"{len(mllogger.buffer)}", style="yellow"),
+                        Text("\nMax Display: ", style="bold"),
+                        Text(f"{MAX_DATA_ROWS} rows", style="dim"),
+                        Text("\nPress Ctrl+C to save and exit.", style="dim yellow")
+                    )
+                    layout["header"].update(
+                        Panel(header_content, title="[bold green]Data Collection Session[/bold green]", title_align="left"))
+
+                    # Create data row for display with individual array elements
+                    timestamp = datetime.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
+                    
+                    # Extract head and body array values
+                    head_values = [f"{float(val):.2f}" for val in head_raw.flatten()]
+                    body_values = [f"{float(val):.2f}" for val in body_raw.flatten()]
+                    
+                    # Create row with timestamp, head values, body values (최대 8개씩 제한)
+                    max_head_cols = min(len(head_values), 2)
+                    max_body_cols = min(len(body_values), 4)
+                    row_data = [timestamp] + head_values[:max_head_cols] + body_values[:max_body_cols]
+                    data_rows_buffer.append(row_data)
+                    
+                    if len(data_rows_buffer) > MAX_DATA_ROWS:
+                        data_rows_buffer.pop(0)
+
+                    # Create and update the real-time data table
+                    realtime_table = Table(show_header=True, show_edge=False, show_lines=False, box=None)
+                    realtime_table.add_column("Timestamp", style="dim")
+                    
+                    for i in range(max_head_cols):
+                        realtime_table.add_column(f"Head_{i}", justify="right", style="green")
+                    
+                    for i in range(max_body_cols):
+                        realtime_table.add_column(f"Body_{i}", justify="right", style="blue")
+                    
+                    for row_data in data_rows_buffer:
+                        realtime_table.add_row(*[str(cell) for cell in row_data])
+                    
+                    # Fill empty rows to maintain table height
+                    for _ in range(MAX_DATA_ROWS - len(data_rows_buffer)):
+                        empty_row = [""] * (1 + max_head_cols + max_body_cols)  # timestamp + head + body
+                        realtime_table.add_row(*empty_row)
+
+                    data_panel = Panel(realtime_table, title="Real-time Training Data", height=MAX_DATA_ROWS + 2)
+                    layout["data_stream"].update(data_panel)
+
+        except KeyboardInterrupt:
+            pass
+        finally:
+            self._clear_screen()
+            self.console.print(Panel("[bold green]Model training session ended. Logs saved. Returning to main menu.[/bold green]",
+                                title="[bold yellow]Session Complete[/bold yellow]"))
+            try:
+                saved_path = mllogger.save()
+                if saved_path:
+                    self.console.print(f"[green]✔ Logs saved successfully to: {saved_path}[/green]")
+                else:
+                    self.console.print("[yellow]⚠ No data to save.[/yellow]")
+            except Exception as e:
+                self.console.print(f"[red]❗ Error saving logs: {e}[/red]")
+            
+            self._pause()
+
     def run(self):
         """Main function to run the CLI application."""
         while True:
@@ -467,8 +573,9 @@ class BedSolutionCLI:
                 choices=[
                     "1. Run",
                     "2. View Logs",
-                    "3. Register Device",
-                    "4. Settings",
+                    "3. Model Training Logs",
+                    "4. Register Device",
+                    "5. Settings",
                     "q. Quit",
                 ],
                 use_indicator=True
@@ -480,9 +587,11 @@ class BedSolutionCLI:
                 self._run_ui()
             elif choice == "2. View Logs":
                 self._logs_ui()
-            elif choice == "3. Register Device":
+            elif choice == "3. Model Training Logs":
+                self._model_training_logs_ui()
+            elif choice == "4. Register Device":
                 self._register_device_ui()
-            elif choice == "4. Settings":
+            elif choice == "5. Settings":
                 self._settings_ui()
             elif choice == "q. Quit":
                 break

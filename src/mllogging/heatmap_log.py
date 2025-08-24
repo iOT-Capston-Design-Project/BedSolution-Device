@@ -9,7 +9,7 @@ class HeatmapLog:
 
     def to_dict(self):
         result = {
-            'timestamp': date.isoformat(),
+            'timestamp': self.date.isoformat(),
             'heatmap': {
                 'head': [],
                 'body': [],
