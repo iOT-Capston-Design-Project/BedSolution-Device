@@ -133,7 +133,7 @@ class BedSolutionCLI:
 
         try:
             with Live(layout, console=self.console, screen=True, redirect_stderr=False, vertical_overflow="visible") as live:
-                for ts, head_raw, body_raw in serial_comm.stream_demo():
+                for ts, head_raw, body_raw in serial_comm.stream():
                     # Simulate sync status toggle
                     sync_status = not sync_status
                     status_text = "[green]Syncing with server...[/green]" if sync_status else "[red]Local storage (offline)...[/red]"

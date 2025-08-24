@@ -34,7 +34,7 @@ class APIClient:
         return device_id
 
 
-    def register_device(self, server_url: Optional[str] = None, api_key: Optional[str] = None) -> Optional[int]:
+    def register_device(self) -> Optional[int]:
         device_id = self._generate_device_id()
         dto = DeviceDTO(device_id, datetime.now())
         devices_table = self.client.table("devices")
@@ -47,7 +47,7 @@ class APIClient:
             return None
         return None
 
-    def get_logs_by_date(self, server_url: Optional[str], api_key: Optional[str], device_id: str) -> LogSummary:
+    def get_logs_by_date(self, device_id: int) -> LogSummary:
         """날짜별 로그 요약(부위별 압력 시간 총합-초)을 조회.
 
         현재는 샘플 데이터를 반환합니다.
