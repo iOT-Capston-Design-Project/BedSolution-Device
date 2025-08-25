@@ -38,7 +38,8 @@ class SerialCommunication:
         self.threads = [] # list of serial threads
 
     def start(self):
-        self._find_ports()
+        if not self._find_ports():
+            return False
         self._generate_serial_threads()
 
     def _convert_to_matrix(self, boards: dict) -> (np.ndarray, np.ndarray):
@@ -76,12 +77,6 @@ class SerialCommunication:
                     if val:
                         body[bottom-2][c] = val
         return head, body
-
-    def stream_demo(self):
-        while True:
-            head, body = self._convert_to_matrix(boards=self.boards)
-            yield time.time(), head, body
-            time.sleep(0.1)
 
     def stream(self, min_interval: float = 0.1, timeout: float = 0.1) -> (time.time, np.ndarray, np.ndarray):
         last_rev = -1

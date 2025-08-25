@@ -9,8 +9,6 @@ from rich.table import Table
 from rich.layout import Layout
 from rich.text import Text
 from rich.live import Live
-import random
-import numpy as np
 import datetime
 from dataclasses import fields, asdict
 from typing import get_type_hints
@@ -111,7 +109,11 @@ class BedSolutionCLI:
         # Initialize Serial, Detection, and Heatmap
         serial_comm = SerialCommunication()
 
-        serial_comm.start()
+        if not serial_comm.start():
+            self._clear_screen()
+            self.console.print(Panel(f"[red]❗ Error starting serial communication.[/red]", title="[bold red]Error[/bold red]", title_align="left"))
+            self._pause()
+            return
 
         detection_config = self._load_detection_config()
         detector = Detection(detection_config)
@@ -259,7 +261,7 @@ class BedSolutionCLI:
 
             with self.console.status("[bold green]Fetching available log dates...", spinner="dots"):
                 time.sleep(1)
-                logs_summary = self.api_client.get_logs_by_date(None, None, device_id)
+                logs_summary = self.api_client.get_logs_by_date(device_id)
 
             if not logs_summary:
                 self.console.print(Panel("No log dates found for this device.", title="[bold red]Not Found[/bold red]"))
@@ -469,7 +471,11 @@ class BedSolutionCLI:
         serial_comm = SerialCommunication()
         mllogger = MLLogger("heatmap_log.csv")
         
-        serial_comm.start()
+        if not serial_comm.start():
+            self._clear_screen()
+            self.console.print(Panel(f"[red]❗ Error starting serial communication.[/red]", title="[bold red]Error[/bold red]", title_align="left"))
+            self._pause()
+            return
 
         # Get current log file path and info
         log_file_path = os.path.abspath("heatmap_log.csv")
