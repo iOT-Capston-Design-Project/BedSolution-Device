@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import logging
 import questionary
 from rich.console import Console
 from rich.panel import Panel
@@ -41,6 +42,41 @@ class BedSolutionCLI:
 ██████╔╝███████╗██████╔╝    ███████║╚██████╔╝███████╗╚██████╔╝   ██║   ██║╚██████╔╝██║ ╚████║
 ╚═════╝ ╚══════╝╚═════╝     ╚══════╝ ╚═════╝ ╚══════╝ ╚═════╝    ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
         """
+        # 로깅 설정 초기화
+        self._setup_logging()
+
+    def _setup_logging(self):
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+        
+        debug_mode = self.config_manager.get_setting("Logging", "debug_mode", "False").lower() == "true"
+        log_level_str = self.config_manager.get_setting("Logging", "log_level", "INFO")
+        log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+        
+        logging.basicConfig(
+            level=log_level,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[]
+        )
+        
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        console_formatter = logging.Formatter('%(levelname)s: %(message)s')
+        console_handler.setFormatter(console_formatter)
+        logging.getLogger().addHandler(console_handler)
+        
+        if debug_mode:
+            log_file = "bedsolution_debug.log"
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler.setLevel(log_level)
+            file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            file_handler.setFormatter(file_formatter)
+            logging.getLogger().addHandler(file_handler)
+            
+            logging.info("=== BedSolution Device Logging Started ===")
+            logging.info(f"Debug mode: {debug_mode}")
+            logging.info(f"Log level: {log_level_str}")
+            logging.info(f"Log file: {log_file}")
 
     def _clear_screen(self):
         """Clears the console screen."""
@@ -91,11 +127,13 @@ class BedSolutionCLI:
 
     def _run_ui(self):
         """Run Screen UI using Rich.Live for a smoother real-time display."""
+        logging.info("Starting Run UI mode")
         self._clear_screen()
 
         server_url, api_key, device_id = self._get_server_config()
 
         if not all([server_url, api_key, device_id]):
+            logging.error("Configuration incomplete - missing server URL, API key, or device ID")
             error_content = "[red]❗ Server URL, API Key, and Device ID must be configured.[/red]\n\nPlease complete the configuration in 'Settings' and 'Register Device' first."
             self.console.print(Panel(error_content, title="[bold red]Configuration Incomplete[/bold red]", title_align="left"))
             self._pause()
@@ -110,6 +148,7 @@ class BedSolutionCLI:
         serial_comm = SerialCommunication()
 
         if not serial_comm.start():
+            logging.error("Failed to start serial communication")
             self._clear_screen()
             self.console.print(Panel(f"[red]❗ Error starting serial communication.[/red]", title="[bold red]Error[/bold red]", title_align="left"))
             self._pause()
@@ -393,19 +432,24 @@ class BedSolutionCLI:
 
     def _settings_ui(self):
         """Settings Screen UI"""
+        logging.info("Opening Settings UI")
         while True:
             self._clear_screen()
 
             server_url = self.config_manager.get_setting("Server", "url", "Not set")
             api_key = self.config_manager.get_setting("Server", "api_key", "Not set")
             log_filename = self.config_manager.get_setting("Logging", "heatmap_log_file", "heatmap_log.csv")
+            debug_mode = self.config_manager.get_setting("Logging", "debug_mode", "False")
+            log_level = self.config_manager.get_setting("Logging", "log_level", "INFO")
 
             masked_api_key = "**********" + api_key[-4:] if len(api_key) > 4 else api_key
 
             settings_text = (
                 f"- Server URL: [cyan]{server_url}[/cyan]\n"
                 f"- API Key:  [cyan]{masked_api_key}[/cyan]\n"
-                f"- Log File: [cyan]{log_filename}[/cyan]"
+                f"- Log File: [cyan]{log_filename}[/cyan]\n"
+                f"- Debug Mode: [cyan]{debug_mode}[/cyan]\n"
+                f"- Log Level: [cyan]{log_level}[/cyan]"
             )
             
             self.console.print(Panel(settings_text, title="[bold cyan]Settings[/bold cyan]", title_align="left"))
@@ -417,8 +461,10 @@ class BedSolutionCLI:
                     "1. Change Server URL",
                     "2. Change API Key",
                     "3. Change Log File Name",
-                    "4. Detection Settings",
-                    "5. Delete All Settings",
+                    "4. Toggle Debug Mode",
+                    "5. Change Log Level",
+                    "6. Detection Settings",
+                    "7. Delete All Settings",
                     "q. Return to Main Menu",
                 ],
                 use_indicator=True
@@ -433,6 +479,7 @@ class BedSolutionCLI:
                 ).ask()
                 if new_url:
                     self.config_manager.update_setting("Server", "url", new_url)
+                    logging.info(f"Server URL updated to: {new_url}")
                     self.console.print("[green]✔ Server URL saved successfully.[/green]")
                     # 변경된 설정을 반영하여 APIClient 재초기화
                     refreshed_api_key = self.config_manager.get_setting("Server", "api_key")
@@ -443,6 +490,7 @@ class BedSolutionCLI:
                 new_key = questionary.password("Enter the new API Key:").ask()
                 if new_key:
                     self.config_manager.update_setting("Server", "api_key", new_key)
+                    logging.info("API Key updated")
                     self.console.print("[green]✔ API Key saved successfully.[/green]")
                     # 변경된 설정을 반영하여 APIClient 재초기화
                     refreshed_server_url = self.config_manager.get_setting("Server", "url")
@@ -455,23 +503,58 @@ class BedSolutionCLI:
                 ).ask()
                 if new_log_filename:
                     self.config_manager.update_setting("Logging", "heatmap_log_file", new_log_filename)
+                    logging.info(f"Log file name updated to: {new_log_filename}")
                     self.console.print("[green]✔ Log file name saved successfully.[/green]")
                     self._pause()
 
-            elif choice == "4. Detection Settings":
+            elif choice == "4. Toggle Debug Mode":
+                current_debug = debug_mode.lower() == "true"
+                new_debug_mode = questionary.confirm(
+                    f"Current debug mode: {'ON' if current_debug else 'OFF'}\nEnable debug mode?",
+                    default=not current_debug
+                ).ask()
+                if new_debug_mode is not None:
+                    new_debug_str = "True" if new_debug_mode else "False"
+                    self.config_manager.update_setting("Logging", "debug_mode", new_debug_str)
+                    logging.info(f"Debug mode {'enabled' if new_debug_mode else 'disabled'}")
+                    self.console.print(f"[green]✔ Debug mode {'enabled' if new_debug_mode else 'disabled'} successfully.[/green]")
+                    self.console.print("[yellow]Note: Restart the application for logging changes to take effect.[/yellow]")
+                    self._pause()
+
+            elif choice == "5. Change Log Level":
+                log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+                current_level = log_level.upper()
+                if current_level not in log_levels:
+                    current_level = "INFO"
+                
+                new_log_level = questionary.select(
+                    "Select log level:",
+                    choices=log_levels,
+                    default=current_level
+                ).ask()
+                if new_log_level:
+                    self.config_manager.update_setting("Logging", "log_level", new_log_level)
+                    logging.info(f"Log level changed to: {new_log_level}")
+                    self.console.print(f"[green]✔ Log level changed to {new_log_level} successfully.[/green]")
+                    self.console.print("[yellow]Note: Restart the application for logging changes to take effect.[/yellow]")
+                    self._pause()
+
+            elif choice == "6. Detection Settings":
                 self._detection_settings_ui()
 
-            elif choice == "5. Delete All Settings":
+            elif choice == "7. Delete All Settings":
                 confirm = questionary.confirm(
                     "Are you sure you want to delete all settings? This action cannot be undone.", default=False
                 ).ask()
                 if confirm:
+                    logging.warning("All settings deleted by user")
                     self.config_manager.delete_all_settings()
                     self.console.print("[green]✔ All settings have been deleted.[/green]")
                     self._pause()
 
     def _model_training_logs_ui(self):
         """Model Training Logs UI - Real-time data collection for model training"""
+        logging.info("Starting Model Training Logs UI mode")
         self._clear_screen()
 
         self.console.print(Panel("[bold yellow]Model Training Logs Mode[/bold yellow]", title="[bold green]Starting Real-time Data Collection[/bold green]"))
@@ -583,7 +666,8 @@ class BedSolutionCLI:
             self._pause()
 
     def run(self):
-        """Main function to run the CLI application."""
+        """Main function to run the CLI applicatio  n."""
+        logging.info("BedSolution CLI application started")
         while True:
             self._clear_screen()
             self.console.print(Align.center(f"[dark_orange]{self.title_art}[/dark_orange]"))
@@ -607,18 +691,25 @@ class BedSolutionCLI:
                 time.sleep(2)
                 break
             elif choice == "1. Run":
+                logging.info("User selected: Run")
                 self._run_ui()
             elif choice == "2. View Logs":
+                logging.info("User selected: View Logs")
                 self._logs_ui()
             elif choice == "3. Model Training Logs":
+                logging.info("User selected: Model Training Logs")
                 self._model_training_logs_ui()
             elif choice == "4. Register Device":
+                logging.info("User selected: Register Device")
                 self._register_device_ui()
             elif choice == "5. Settings":
+                logging.info("User selected: Settings")
                 self._settings_ui()
             elif choice == "q. Quit":
+                logging.info("User selected: Quit - Exiting application")
                 break
 
+        logging.info("BedSolution CLI application exiting")
         self.console.print("\nExiting program.")
         sys.exit(0)
 
