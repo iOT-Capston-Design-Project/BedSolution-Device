@@ -1,7 +1,7 @@
 from typing import Optional
 import time, re, sys, threading
 from glob import glob
-from serial.board import BoardData
+from serialcm.board import BoardData
 import numpy as np
 import logging
 

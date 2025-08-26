@@ -18,7 +18,7 @@ from config_manager import config_manager
 from api.api_client import APIClient
 from heatmap.heatmap import PressureHeatmap
 from detection.config import DetectionConfig
-from serial.serial_communication import SerialCommunication
+from serialcm.serial_communication import SerialCommunication
 from detection.detection import Detection
 from mllogging.mllogger import MLLogger
 
@@ -398,12 +398,14 @@ class BedSolutionCLI:
 
             server_url = self.config_manager.get_setting("Server", "url", "Not set")
             api_key = self.config_manager.get_setting("Server", "api_key", "Not set")
+            log_filename = self.config_manager.get_setting("Logging", "heatmap_log_file", "heatmap_log.csv")
 
             masked_api_key = "**********" + api_key[-4:] if len(api_key) > 4 else api_key
 
             settings_text = (
                 f"- Server URL: [cyan]{server_url}[/cyan]\n"
-                f"- API Key:  [cyan]{masked_api_key}[/cyan]"
+                f"- API Key:  [cyan]{masked_api_key}[/cyan]\n"
+                f"- Log File: [cyan]{log_filename}[/cyan]"
             )
             
             self.console.print(Panel(settings_text, title="[bold cyan]Settings[/bold cyan]", title_align="left"))
@@ -414,8 +416,9 @@ class BedSolutionCLI:
                 choices=[
                     "1. Change Server URL",
                     "2. Change API Key",
-                    "3. Detection Settings",
-                    "4. Delete All Settings",
+                    "3. Change Log File Name",
+                    "4. Detection Settings",
+                    "5. Delete All Settings",
                     "q. Return to Main Menu",
                 ],
                 use_indicator=True
@@ -446,10 +449,19 @@ class BedSolutionCLI:
                     self.api_client = APIClient(refreshed_server_url, new_key)
                     self._pause()
 
-            elif choice == "3. Detection Settings":
+            elif choice == "3. Change Log File Name":
+                new_log_filename = questionary.text(
+                    "Enter the new log file name:", default=log_filename
+                ).ask()
+                if new_log_filename:
+                    self.config_manager.update_setting("Logging", "heatmap_log_file", new_log_filename)
+                    self.console.print("[green]✔ Log file name saved successfully.[/green]")
+                    self._pause()
+
+            elif choice == "4. Detection Settings":
                 self._detection_settings_ui()
 
-            elif choice == "4. Delete All Settings":
+            elif choice == "5. Delete All Settings":
                 confirm = questionary.confirm(
                     "Are you sure you want to delete all settings? This action cannot be undone.", default=False
                 ).ask()
@@ -469,7 +481,10 @@ class BedSolutionCLI:
 
         # Initialize Serial Communication and MLLogger
         serial_comm = SerialCommunication()
-        mllogger = MLLogger("heatmap_log.csv")
+        
+        # 설정에서 로그 파일명 가져오기 (기본값: heatmap_log.csv)
+        log_filename = self.config_manager.get_setting("Logging", "heatmap_log_file", fallback="heatmap_log.csv")
+        mllogger = MLLogger(log_filename)
         
         if not serial_comm.start():
             self._clear_screen()
@@ -478,7 +493,7 @@ class BedSolutionCLI:
             return
 
         # Get current log file path and info
-        log_file_path = os.path.abspath("heatmap_log.csv")
+        log_file_path = os.path.abspath(log_filename)
         buffer_count = 0
 
         layout = Layout()
