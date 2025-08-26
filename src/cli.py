@@ -603,6 +603,8 @@ class BedSolutionCLI:
             ).ask()
 
             if choice is None:
+                self.console.print("[bold yellow]No input detected, this can happen in non-interactive shells. Exiting.[/bold yellow]")
+                time.sleep(2)
                 break
             elif choice == "1. Run":
                 self._run_ui()
