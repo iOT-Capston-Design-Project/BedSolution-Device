@@ -21,7 +21,7 @@ from heatmap.heatmap import PressureHeatmap
 from detection.config import DetectionConfig
 from serialcm.serial_communication import SerialCommunication
 from detection.detection import Detection
-from mllogging.mllogger import MLLogger
+from ml_utils.mllogger import MLLogger
 
 
 class BedSolutionCLI:

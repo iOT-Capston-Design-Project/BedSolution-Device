@@ -1,5 +1,5 @@
 import numpy as np
-from mllogging.heatmap_log import HeatmapLog
+from ml_utils.heatmap_log import HeatmapLog
 from datetime import datetime
 import csv
 import os

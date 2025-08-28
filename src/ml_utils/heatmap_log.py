@@ -15,12 +15,6 @@ class HeatmapLog:
                 'body': [],
             }
         }
-        # Head
-        for row in range(self.head.shape[0]):
-            for col in range(self.head.shape[1]):
-                result['heatmap']['head'].append(self.head[row, col])
-        # Body
-        for row in range(self.body.shape[0]):
-            for col in range(self.body.shape[1]):
-                result['heatmap']['body'].append(self.body[row, col])
+        result['heatmap']['head'] = self.head.tolist()
+        result['heatmap']['body'] = self.body.tolist()
         return result
