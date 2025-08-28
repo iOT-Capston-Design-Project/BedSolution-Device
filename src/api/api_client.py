@@ -26,15 +26,19 @@ class APIClient:
     ) -> None:
         self.server_url = server_url.rstrip("/") if server_url else None
         self.api_key = api_key
-        self.client = create_client(self.server_url, self.api_key)
+        if not self.server_url or not self.api_key:
+            self.client = None
+        else:
+            self.client = create_client(self.server_url, self.api_key)
 
     def _generate_device_id(self) -> int:
         device_uuid = uuid.uuid4()
         device_id = int(device_uuid.hex, 16) % (2**31)
         return device_id
 
-
     def register_device(self) -> Optional[int]:
+        if self.client is None:
+            return None
         device_id = self._generate_device_id()
         dto = DeviceDTO(device_id, datetime.now())
         devices_table = self.client.table("devices")

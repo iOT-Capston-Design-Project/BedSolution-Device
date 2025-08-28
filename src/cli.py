@@ -31,8 +31,8 @@ class BedSolutionCLI:
         self.console = Console()
         self.config_manager = config_manager
         # APIClient를 설정의 기본값으로 초기화
-        initial_server_url = self.config_manager.get_setting("Server", "url")
-        initial_api_key = self.config_manager.get_setting("Server", "api_key")
+        initial_server_url = self.config_manager.get_setting("Server", "url", "")
+        initial_api_key = self.config_manager.get_setting("Server", "api_key", "")
         self.api_client = APIClient(initial_server_url, initial_api_key)
         self.title_art = """
 ██████╗ ███████╗██████╗     ███████╗ ██████╗ ██╗     ██╗   ██╗████████╗██╗ ██████╗ ███╗   ██╗
